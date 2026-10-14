@@ -1,11 +1,12 @@
 # Big Data Live
 
-A Streamlit classroom simulation focused on **Volume** and **Velocity**.
+A Streamlit classroom simulation focused on **Volume**, **Velocity**, and the **Value** of live analytics.
 
 - A large central counter shows accumulated events.
 - Move the 10–1,000 events/second slider to change the incoming rate.
 - The velocity chart retains its own 60-second history on a fixed vertical scale, so rate changes remain visible even as sensor rows leave the display buffer.
-- Pause stops accumulation and shows zero velocity; reset clears volume and chart history.
+- Three compact analytics cards show mean speed, the percentage of readings below 25 mph, and mean cars per reading, calculated from the latest available sensor rows (up to 300). Means are per reading, not vehicle-weighted.
+- Pause stops accumulation and shows zero velocity while retaining the traffic snapshot; reset clears volume, chart history, and analytics.
 - Recent sensor readings are available in a collapsed panel. JSON logs are removed.
 
 The counter integrates elapsed time at the selected simulated rate. It is not a benchmark of real ingestion throughput. Only the latest 300 sensor rows and at most 600 chart samples are retained in memory. Session data resets when a new session starts.

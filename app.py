@@ -1,4 +1,4 @@
-"""A classroom demonstration of streaming volume and velocity."""
+"""A classroom demonstration of streaming volume, velocity, and live analytics."""
 
 import time
 from datetime import datetime
@@ -35,7 +35,7 @@ st.title("Big Data Live")
 st.sidebar.header("Stream controls")
 generation_speed = st.sidebar.slider("Events per second", 10, 1000, 200, 10)
 sim_status = st.sidebar.radio("Stream", ["Running", "Paused"])
-if st.sidebar.button("Reset volume & chart", width="stretch"):
+if st.sidebar.button("Reset simulation", width="stretch"):
     st.session_state.pop(STATE_KEY, None)
 
 
@@ -127,6 +127,25 @@ def render_dashboard():
         width="stretch",
     )
     st.caption("Simulated stream · last 60 seconds")
+    st.subheader("Live traffic analytics")
+    rows = state["rows"]
+    speed_col, slow_col, cars_col = st.columns(3)
+    speed_col.metric(
+        "Average speed",
+        f"{rows['Speed (mph)'].mean():.1f} mph" if not rows.empty else "—",
+        border=True,
+    )
+    slow_col.metric(
+        "Slow readings (<25 mph)",
+        f"{rows['Speed (mph)'].lt(25).mean():.0%}" if not rows.empty else "—",
+        border=True,
+    )
+    cars_col.metric(
+        "Cars / reading",
+        f"{rows['Cars'].mean():.1f}" if not rows.empty else "—",
+        border=True,
+    )
+    st.caption(f"Latest {len(rows):,} sensor readings")
     with st.expander("Recent sensor data"):
         st.dataframe(state["rows"].tail(8), width="stretch", hide_index=True)
 
