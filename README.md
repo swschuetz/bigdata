@@ -1,6 +1,14 @@
-# Live Big Data Simulation
+# Big Data Live
 
-A Streamlit classroom dashboard simulating an IoT smart city sensor network to illustrate Volume, Velocity, Variety, and Value.
+A Streamlit classroom simulation focused on **Volume** and **Velocity**.
+
+- A large central counter shows accumulated events.
+- Move the 10–1,000 events/second slider to change the incoming rate.
+- The velocity chart retains its own 60-second history on a fixed vertical scale, so rate changes remain visible even as sensor rows leave the display buffer.
+- Pause stops accumulation and shows zero velocity; reset clears volume and chart history.
+- Recent sensor readings are available in a collapsed panel. JSON logs are removed.
+
+The counter integrates elapsed time at the selected simulated rate. It is not a benchmark of real ingestion throughput. Only the latest 300 sensor rows and at most 600 chart samples are retained in memory. Session data resets when a new session starts.
 
 ## Run locally
 
@@ -13,8 +21,6 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Adjust the sidebar velocity slider or pause/resume the simulation. Sensor rows and semi-structured JSON logs refresh every half-second while running. The selected velocity is a simulated target; actual throughput depends on rendering speed. Volume includes sensor packets and additional logs. Memory is bounded to the latest 300 sensor rows and 8 log entries, while the cumulative event count continues increasing. Session data resets when a new session starts.
-
 ## Deploy to Streamlit Community Cloud
 
 1. Sign in at https://share.streamlit.io/ with GitHub access to this repository.
@@ -22,5 +28,3 @@ Adjust the sidebar velocity slider or pause/resume the simulation. Sensor rows a
 3. Select Python 3.12 in Advanced settings, then deploy.
 
 Dependencies are installed from `requirements.txt`. No API keys, secrets, or external data services are required.
-
-Deployment guide: https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app
