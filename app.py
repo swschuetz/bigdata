@@ -1,153 +1,163 @@
-"""A classroom demonstration of streaming volume, velocity, and live analytics."""
+"""Interactive classroom demonstration of a streaming data pipeline."""
 
+import math
 import time
-from datetime import datetime
+from pathlib import Path
 
 import altair as alt
-import numpy as np
 import pandas as pd
 import streamlit as st
 
+from simulation import HISTORY_SECONDS, Simulation
+
 UPDATE_INTERVAL = 0.5
-MAX_ROWS = 300
-HISTORY_SECONDS = 60
-STATE_KEY = "simulation_v2"
+STATE_KEY = "simulation_v3"
+MAX_CAPACITY = 1500
 
 st.set_page_config(page_title="Big Data Live", page_icon="📊", layout="wide")
-st.markdown("""
-<style>
-.block-container { padding-top: 2rem; }
-.volume-card {
-    text-align: center; padding: 20px 12px; margin: 8px 0 20px;
-    background: rgba(59, 130, 246, 0.09);
-    border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 20px;
-}
-.volume-label { font-size: 16px; font-weight: 700; letter-spacing: 0.16em; }
-.volume-number {
-    font-size: clamp(48px, 8vw, 100px); font-weight: 800;
-    line-height: 1.15; font-variant-numeric: tabular-nums;
-}
-.volume-unit { font-size: 16px; opacity: 0.7; }
-</style>
-""", unsafe_allow_html=True)
+st.html(Path(__file__).with_name("style.css"))
 st.title("Big Data Live")
 
-st.sidebar.header("Stream controls")
-generation_speed = st.sidebar.slider("Events per second", 10, 1000, 200, 10)
-sim_status = st.sidebar.radio("Stream", ["Running", "Paused"])
-if st.sidebar.button("Reset simulation", width="stretch"):
+
+def reset_simulation():
     st.session_state.pop(STATE_KEY, None)
+    st.session_state.update(arrival_rate=200, capacity=300, traffic_jam=False, stream_status="Running")
 
 
-def advance_stream(state, now, next_rate):
-    """Account for elapsed time at the previous rate, then apply new controls."""
-    elapsed = max(0.0, now - state["updated_at"])
-    incoming = state["remainder"] + elapsed * state["rate"]
-    count = int(incoming)
-    state["remainder"] = incoming - count
-    state["total"] += count
-    state["updated_at"] = now
-
-    if count:
-        # Count every event, but only materialize the bounded display buffer.
-        retained = min(count, MAX_ROWS)
-        batch = pd.DataFrame({
-            "Time": [datetime.now()] * retained,
-            "Cars": np.random.randint(2, 70, size=retained),
-            "Speed (mph)": np.random.uniform(10, 75, size=retained).round(1),
-        })
-        state["rows"] = pd.concat(
-            [state["rows"], batch], ignore_index=True
-        ).tail(MAX_ROWS).reset_index(drop=True)
-
-    seconds = now - state["started_at"]
-    state["rate"] = next_rate
-    state["history"].append({"Seconds": seconds, "Events per second": next_rate})
-    cutoff = seconds - HISTORY_SECONDS
-    # Keep one point before the window to preserve the left-edge step.
-    while len(state["history"]) > 2 and state["history"][1]["Seconds"] < cutoff:
-        state["history"].pop(0)
-    state["history"] = state["history"][-600:]
+def add_capacity():
+    st.session_state.capacity = min(MAX_CAPACITY, st.session_state.capacity + 500)
 
 
-def velocity_chart(history, seconds):
-    data = pd.DataFrame(history)
-    base = alt.Chart(data).encode(
-        x=alt.X(
-            "Seconds:Q", title="Seconds",
-            scale=alt.Scale(domain=[max(0, seconds - HISTORY_SECONDS), max(10, seconds)], nice=False),
-            axis=alt.Axis(format=".0f", tickCount=7, grid=False),
-        ),
-        y=alt.Y(
-            "Events per second:Q", title="Events / second",
-            scale=alt.Scale(domain=[0, 1050], nice=False),
-            axis=alt.Axis(values=[0, 250, 500, 750, 1000]),
-        ),
-        tooltip=[alt.Tooltip("Seconds:Q", format=".1f"), "Events per second:Q"],
+def toggle_jam():
+    st.session_state.traffic_jam = not st.session_state.traffic_jam
+
+
+for key, value in {"arrival_rate": 200, "capacity": 300, "traffic_jam": False, "stream_status": "Running"}.items():
+    st.session_state.setdefault(key, value)
+
+st.sidebar.header("Stream controls")
+st.sidebar.slider("Incoming events / sec", 10, 1000, step=10, key="arrival_rate")
+st.sidebar.radio("Simulation", ["Running", "Paused"], key="stream_status")
+st.sidebar.divider()
+st.sidebar.slider("Processing capacity / sec", 100, MAX_CAPACITY, step=100, key="capacity")
+st.sidebar.button(
+    "Add processing capacity", on_click=add_capacity, width="stretch",
+    disabled=st.session_state.capacity >= MAX_CAPACITY,
+)
+st.sidebar.button(
+    "Clear traffic jam" if st.session_state.traffic_jam else "Trigger traffic jam",
+    on_click=toggle_jam, type="primary", width="stretch",
+)
+if st.session_state.traffic_jam:
+    st.sidebar.caption("Traffic jam active")
+st.sidebar.divider()
+st.sidebar.button("Reset simulation", on_click=reset_simulation, width="stretch")
+
+
+def flow_lane(rate, seconds, outgoing=False):
+    # Dots are illustrative event batches, not one dot per event.
+    count = min(30, math.ceil(rate / 40)) if rate else 0
+    duration = 3.6 - min(rate, MAX_CAPACITY) / MAX_CAPACITY * 2
+    dots = "".join(
+        f'<span class="flow-dot" style="animation-duration:{duration:.3f}s;'
+        f'animation-delay:-{(seconds + i * duration / count) % duration:.3f}s"></span>'
+        for i in range(count)
     )
-    area = base.mark_area(interpolate="step-after", color="#3b82f6", opacity=0.2, clip=True)
-    line = base.mark_line(interpolate="step-after", color="#3b82f6", strokeWidth=4, clip=True)
-    latest = base.transform_filter(
-        alt.datum.Seconds == data.iloc[-1]["Seconds"]
-    ).mark_point(color="#3b82f6", filled=True, size=120, opacity=1)
-    return (area + line + latest).properties(height=280).configure_view(
-        stroke=None
-    ).configure_axis(labelFontSize=13, titleFontSize=13)
+    return f'<div class="flow-lane {"outgoing" if outgoing else "incoming"}" aria-hidden="true">{dots}</div>'
+
+
+def render_flow(sim):
+    queue_class = "overloaded" if sim.backlog else ""
+    st.html(f"""
+<div class="pipeline" role="img" aria-label="Simulated event batches flow from sensors through processing to insights">
+  <div class="flow-stage">Sensors<span>{'Traffic jam' if sim.jam else 'Smart city'}</span></div>
+  {flow_lane(sim.incoming_rate, sim.active_seconds)}
+  <div class="flow-stage {queue_class}">Processing<span>{sim.capacity:,}/sec capacity</span></div>
+  {flow_lane(sim.processing_rate, sim.active_seconds, outgoing=True)}
+  <div class="flow-stage">Insights<span>Live analytics</span></div>
+</div>
+""")
+
+
+def velocity_chart(sim):
+    seconds = sim.history[-1]["Seconds"]
+    data = pd.DataFrame(sim.history)
+    x = alt.X(
+        "Seconds:Q", title="Seconds",
+        scale=alt.Scale(domain=[max(0, seconds - HISTORY_SECONDS), max(10, seconds)], nice=False),
+        axis=alt.Axis(format=".0f", tickCount=7, grid=False),
+    )
+    scale = alt.Scale(domain=[0, 1600], nice=False)
+    base = alt.Chart(data).encode(x=x)
+    area = base.mark_area(interpolate="step-after", color="#3b82f6", opacity=0.10, clip=True).encode(
+        y=alt.Y("Incoming:Q", title="Events / sec", scale=scale, axis=alt.Axis(values=[0, 500, 1000, 1500], labelOverlap=False)),
+    )
+    lines = base.transform_fold(["Incoming", "Processing", "Capacity"], as_=["Stream", "Rate"]).encode(
+        y=alt.Y("Rate:Q", title="Events / sec", scale=scale, axis=alt.Axis(values=[0, 500, 1000, 1500], labelOverlap=False)),
+        color=alt.Color("Stream:N", scale=alt.Scale(
+            domain=["Incoming", "Processing", "Capacity"],
+            range=["#3b82f6", "#10b981", "#f59e0b"],
+        ), legend=alt.Legend(title=None, orient="top", labelFontSize=12)),
+        strokeDash=alt.StrokeDash("Stream:N", scale=alt.Scale(
+            domain=["Incoming", "Processing", "Capacity"], range=[[1, 0], [1, 0], [6, 4]]
+        ), legend=None),
+        tooltip=[alt.Tooltip("Seconds:Q", format=".1f"), "Stream:N", "Rate:Q"],
+    )
+    paths = lines.mark_line(interpolate="step-after", strokeWidth=3, clip=True)
+    latest = lines.transform_filter(alt.datum.Seconds == seconds).mark_point(filled=True, size=60)
+    return (area + paths + latest).properties(height=260).configure_view(stroke=None)
+
+
+def render_analytics(sim):
+    snapshot = sim.analytics()
+    if snapshot and snapshot["congestion"]:
+        st.warning("Congestion detected · consider rerouting traffic", icon="🚦")
+    elif len(sim.rows) >= 20:
+        st.success("Traffic flowing · no congestion detected", icon="✅")
+    else:
+        st.info("Waiting for processed sensor readings", icon="📡")
+    speed_col, slow_col, cars_col = st.columns(3)
+    speed_col.metric("Average speed", f"{snapshot['speed']:.1f} mph" if snapshot else "—", border=True)
+    slow_col.metric("Slow readings (<25 mph)", f"{snapshot['slow_share']:.0%}" if snapshot else "—", border=True)
+    cars_col.metric("Cars / reading", f"{snapshot['cars']:.1f}" if snapshot else "—", border=True)
+    st.caption(f"Latest {len(sim.rows):,} processed readings · alerts follow the data through the queue")
+    with st.expander("Recent sensor data"):
+        st.dataframe(pd.DataFrame(list(sim.rows)[-8:]), width="stretch", hide_index=True)
 
 
 @st.fragment(run_every=UPDATE_INTERVAL)
 def render_dashboard():
     now = time.monotonic()
-    rate = generation_speed if sim_status == "Running" else 0
+    controls = dict(
+        rate=st.session_state.arrival_rate, capacity=st.session_state.capacity,
+        jam=st.session_state.traffic_jam, running=st.session_state.stream_status == "Running",
+    )
     if STATE_KEY not in st.session_state:
-        st.session_state[STATE_KEY] = {
-            "started_at": now, "updated_at": now, "rate": rate,
-            "total": 0, "remainder": 0.0,
-            "rows": pd.DataFrame({
-                "Time": pd.Series(dtype="datetime64[ns]"),
-                "Cars": pd.Series(dtype="int64"),
-                "Speed (mph)": pd.Series(dtype="float64"),
-            }),
-            "history": [],
-        }
-    state = st.session_state[STATE_KEY]
-    advance_stream(state, now, rate)
+        st.session_state[STATE_KEY] = Simulation(now, **controls)
+    sim = st.session_state[STATE_KEY]
+    sim.advance(now, **controls)
 
-    st.markdown(f"""
+    st.html(f"""
 <div class="volume-card">
-    <div class="volume-label">VOLUME</div>
-    <div class="volume-number">{state['total']:,}</div>
-    <div class="volume-unit">events received</div>
+  <div class="volume-label">VOLUME</div>
+  <div class="volume-number">{sim.total:,}</div>
+  <div class="volume-unit">events received</div>
+  <div class="volume-projection">{sim.incoming_rate * 86400:,} events / day at this rate <span>· projection</span></div>
 </div>
-""", unsafe_allow_html=True)
-    st.metric("VELOCITY", f"{rate:,} events / sec")
-    st.progress(rate / 1000)
-    st.altair_chart(
-        velocity_chart(state["history"], now - state["started_at"]),
-        width="stretch",
+""")
+    render_flow(sim)
+    incoming, processing, backlog = st.columns(3)
+    incoming.metric("Incoming / sec", f"{sim.incoming_rate:,}")
+    processing.metric("Processing / sec", f"{sim.processing_rate:,}")
+    queue_label = "Backlog · paused" if not sim.running else (
+        "Backlog · growing" if sim.incoming_rate > sim.capacity else
+        "Backlog · catching up" if sim.backlog and sim.capacity > sim.rate else
+        "Backlog · waiting" if sim.backlog else "Backlog · clear"
     )
-    st.caption("Simulated stream · last 60 seconds")
-    st.subheader("Live traffic analytics")
-    rows = state["rows"]
-    speed_col, slow_col, cars_col = st.columns(3)
-    speed_col.metric(
-        "Average speed",
-        f"{rows['Speed (mph)'].mean():.1f} mph" if not rows.empty else "—",
-        border=True,
-    )
-    slow_col.metric(
-        "Slow readings (<25 mph)",
-        f"{rows['Speed (mph)'].lt(25).mean():.0%}" if not rows.empty else "—",
-        border=True,
-    )
-    cars_col.metric(
-        "Cars / reading",
-        f"{rows['Cars'].mean():.1f}" if not rows.empty else "—",
-        border=True,
-    )
-    st.caption(f"Latest {len(rows):,} sensor readings")
-    with st.expander("Recent sensor data"):
-        st.dataframe(state["rows"].tail(8), width="stretch", hide_index=True)
+    backlog.metric(queue_label, f"{sim.backlog:,}")
+    st.altair_chart(velocity_chart(sim), width="stretch")
+    st.caption("Simulated rates · last 60 seconds · moving dots represent event batches")
+    render_analytics(sim)
 
 
 render_dashboard()

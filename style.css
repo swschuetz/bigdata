@@ -1,0 +1,42 @@
+.block-container { padding-top: 1.8rem; }
+.volume-card {
+    text-align: center; padding: 18px 12px; margin: 4px 0 12px;
+    background: linear-gradient(120deg, rgba(59,130,246,.13), rgba(16,185,129,.06));
+    border: 1px solid rgba(59,130,246,.25); border-radius: 20px;
+}
+.volume-label { font-size: 14px; font-weight: 700; letter-spacing: .18em; }
+.volume-number {
+    font-size: clamp(48px, 7vw, 92px); font-weight: 800;
+    line-height: 1.12; font-variant-numeric: tabular-nums;
+}
+.volume-unit { font-size: 15px; opacity: .7; }
+.volume-projection { margin-top: 8px; font-size: 16px; font-weight: 600; }
+.volume-projection span { opacity: .6; font-weight: 400; }
+.pipeline { display: flex; align-items: center; margin: 4px 0 12px; width: 100%; }
+.flow-stage {
+    flex: 0 0 122px; text-align: center; padding: 12px 6px;
+    border: 1px solid rgba(128,128,128,.25); border-radius: 12px; font-weight: 700;
+}
+.flow-stage span { display: block; font-weight: 400; font-size: 12px; opacity: .7; margin-top: 3px; }
+.flow-stage.overloaded { border-color: #f59e0b; background: rgba(245,158,11,.1); }
+.flow-lane { flex: 1; min-width: 20px; height: 40px; position: relative; overflow: hidden; }
+.flow-lane::before {
+    content: ''; position: absolute; left: 0; right: 0; top: 19px;
+    border-top: 2px solid rgba(59,130,246,.18);
+}
+.flow-lane.outgoing::before { border-color: rgba(16,185,129,.2); }
+.flow-dot {
+    position: absolute; top: 15px; width: 9px; height: 9px; border-radius: 50%;
+    background: #3b82f6; box-shadow: 0 0 7px rgba(59,130,246,.35);
+    animation: event-flow linear infinite;
+}
+.outgoing .flow-dot { background: #10b981; box-shadow: 0 0 7px rgba(16,185,129,.35); }
+@keyframes event-flow { from { left: -10px; } to { left: 100%; } }
+@media (max-width: 640px) {
+    .flow-stage { flex-basis: 80px; font-size: 12px; padding: 10px 3px; }
+    .flow-stage span { font-size: 10px; }
+    .volume-projection { font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .flow-dot { animation-play-state: paused; }
+}
