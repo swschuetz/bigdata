@@ -110,7 +110,15 @@ def velocity_chart(sim):
 
 def render_analytics(sim):
     snapshot = sim.analytics()
-    if snapshot and snapshot["congestion"]:
+    if sim.backlog:
+        st.warning("Analytics delayed · showing older traffic conditions", icon="⏳")
+        if snapshot and snapshot["congestion"]:
+            st.caption("Congestion detected in the processed readings.")
+    elif not sim.running:
+        st.info("Analytics paused · showing last processed readings", icon="⏸️")
+        if snapshot and snapshot["congestion"]:
+            st.caption("Congestion detected in the last processed readings.")
+    elif snapshot and snapshot["congestion"]:
         st.warning("Congestion detected · consider rerouting traffic", icon="🚦")
     elif len(sim.rows) >= 20:
         st.success("Traffic flowing · no congestion detected", icon="✅")
@@ -154,7 +162,14 @@ def render_dashboard():
         "Backlog · catching up" if sim.backlog and sim.capacity > sim.rate else
         "Backlog · waiting" if sim.backlog else "Backlog · clear"
     )
-    backlog.metric(queue_label, f"{sim.backlog:,}")
+    backlog.metric(
+        queue_label, f"{sim.backlog:,}",
+        help="New-reading wait is backlog divided by processing capacity, assuming "
+             "capacity stays constant. It estimates when a new reading reaches "
+             "processing, not when the entire queue empties or an alert fires.",
+    )
+    wait_label = f"≈{math.ceil(sim.backlog / sim.capacity):,} s" if sim.running else "paused"
+    backlog.caption(f"New-reading wait: {wait_label}")
     st.altair_chart(velocity_chart(sim), width="stretch")
     st.caption("Simulated rates · last 60 seconds · moving dots represent event batches")
     render_analytics(sim)

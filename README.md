@@ -10,6 +10,8 @@ An interactive Streamlit classroom demonstration of **Volume**, **Velocity**, an
 4. Click **Trigger traffic jam**. New sensor readings contain slower speeds and more cars. The processed-data analytics flag congestion.
 5. Trigger an incident while the queue is large to show how processing delays can delay insights. Clear the incident and watch recovery arrive through the same queue.
 
+When a backlog exists, an amber **Analytics delayed** notice replaces the green traffic status. Any congestion already detected remains visible as a finding in the processed readings. The backlog card shows the estimated wait for a new reading: backlog divided by processing capacity, rounded up to seconds. This assumes constant capacity; it is not the time to empty the queue or guarantee an alert. Pausing marks the estimate as paused and the analytics as a historical snapshot.
+
 The chart shows 60 seconds of incoming rate, processing rate, and capacity on a fixed scale. Dots represent illustrative batches, not individual events. Pause freezes arrivals and processing; reset restores the starting controls and clears the simulation. The sensor table stays collapsed to keep the display simple.
 
 ## What is simulated
